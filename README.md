@@ -3,10 +3,8 @@
 An openFPGA core for Atari's **Tempest** (1980), the colour vector arcade game,
 for the Analogue Pocket (handheld and Dock).
 
-> **Status: 0.1.0, untested on hardware.** The RTL lints clean and passes the
-> self-checking simulations in `sim/`, but the bitstream has not yet been run
-> on a Pocket with the real game ROMs. Expect rough edges; see
-> [Known gaps](#known-gaps).
+> **Status: 0.1.0, playable.** Tested on an Analogue Pocket with the real
+> game ROMs. Expect some rough edges; see [Known gaps](#known-gaps).
 
 ROMs are **not** included.
 
