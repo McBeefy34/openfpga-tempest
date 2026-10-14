@@ -1,0 +1,96 @@
+################################################################################
+# Build the Tempest core for the Analogue Pocket.
+#
+# Runs on every push to main, on v* tags and on manual dispatch:
+#   test     Verilator lint + self-checking simulations
+#   compile  Quartus 18.1 in Docker, timing check, SD-card package
+# Tag pushes (v0.1.0, ...) also publish a GitHub release with the zip.
+################################################################################
+name: Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Verilator
+        run: sudo apt-get update && sudo apt-get install -y verilator
+
+      - name: Lint and simulate
+        run: ./sim/run_tests.sh
+
+  compile:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space for the Quartus image
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /opt/hostedtoolcache/CodeQL /usr/local/.ghcup \
+                      /usr/local/share/boost /usr/local/graalvm
+          sudo docker image prune --all --force
+          df -h /
+
+      - name: Compile with Quartus 18.1
+        run: |
+          docker run --rm -v "$PWD":/build -w /build/src/fpga \
+            raetro/quartus:pocket \
+            quartus_sh --flow compile ap_core.qpf
+
+      - name: Resource use
+        run: |
+          grep -E 'Logic utilization|Total registers|Total block memory bits|Total RAM Blocks|Total PLLs' \
+            src/fpga/output_files/ap_core.fit.summary || cat src/fpga/output_files/ap_core.fit.summary
+
+      - name: Check timing closed
+        run: |
+          sta=src/fpga/output_files/ap_core.sta.summary
+          grep -B3 'Slack' "$sta" | grep -E 'Type|Slack' | paste - - | head -30
+          if grep -q 'Slack : -' "$sta"; then
+            # Reported, not fatal: a small miss usually still runs, and you
+            # can judge on hardware. Check the reports artifact for the path.
+            echo "::warning::Timing not met - see quartus-reports for the failing paths"
+            grep -B3 'Slack : -' "$sta" | head -30
+          else
+            echo "all corners positive"
+          fi
+
+      - name: Package
+        run: python3 tools/package.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tempest-pocket
+          path: release/pocket/
+          if-no-files-found: error
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" release/tempest-pocket.zip \
+            --title "Tempest for Analogue Pocket ${GITHUB_REF_NAME}" \
+            --notes "Unzip onto the root of the Pocket's SD card. ROMs are not included: build tempest.rom with Assets/tempest/common/make_tempest_rom.py and put it in that folder."
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quartus-reports
+          path: |
+            src/fpga/output_files/*.rpt
+            src/fpga/output_files/*.summary
+          if-no-files-found: ignore

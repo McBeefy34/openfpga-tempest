@@ -1,0 +1,19 @@
+{
+    "input": {
+        "magic": "APF_VER_1",
+        "controllers": [
+            {
+                "type": "default",
+                "mappings": [
+                    { "id": 0, "name": "Fire",            "key": "pad_btn_a" },
+                    { "id": 1, "name": "Superzapper",     "key": "pad_btn_b" },
+                    { "id": 2, "name": "Fire",            "key": "pad_btn_x" },
+                    { "id": 3, "name": "Superzapper",     "key": "pad_btn_y" },
+                    { "id": 4, "name": "Start 2 Players", "key": "pad_trig_l" },
+                    { "id": 5, "name": "Coin",            "key": "pad_btn_select" },
+                    { "id": 6, "name": "Start 1 Player",  "key": "pad_btn_start" }
+                ]
+            }
+        ]
+    }
+}

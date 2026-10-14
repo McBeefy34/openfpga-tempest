@@ -1,0 +1,28 @@
+{
+    "data": {
+        "magic": "APF_VER_1",
+        "data_slots": [
+            {
+                "name": "ROM",
+                "id": 0,
+                "required": true,
+                "parameters": "0x8",
+                "filename": "tempest.rom",
+                "extensions": ["rom"],
+                "size_exact": 24576,
+                "address": "0x00000000"
+            },
+            {
+                "name": "High Scores",
+                "id": 1,
+                "required": false,
+                "parameters": "0x22",
+                "nonvolatile": true,
+                "filename": "tempest.sav",
+                "extensions": ["sav"],
+                "size_maximum": "0x40",
+                "address": "0x20000000"
+            }
+        ]
+    }
+}
