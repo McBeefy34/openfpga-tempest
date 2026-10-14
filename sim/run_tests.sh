@@ -15,10 +15,10 @@ verilator --lint-only $QUIET -Wno-UNUSEDSIGNAL -Wno-UNDRIVEN -Wno-MULTIDRIVEN -I
   $CORE/core_top.sv $CORE/pocket_loader.sv $CORE/spinner.sv $RTL $CORE/core_bridge_cmd.v ../src/fpga/apf/common.v stubs/ip_stubs.v
 
 echo "== sim: bridge loader"
-verilator --cc --exe --build -O2 -j 0 $QUIET --top-module pocket_loader -Mdir $OBJ/loader $CORE/pocket_loader.sv tb_loader.cpp >/dev/null
+verilator --cc --exe --build -O2 -j 0 $QUIET --top-module pocket_loader -Mdir $OBJ/loader $CORE/pocket_loader.sv "$PWD/tb_loader.cpp" >/dev/null
 $OBJ/loader/Vpocket_loader
 
 echo "== sim: Tempest machine with a synthetic test ROM"
 python3 make_test_rom.py $OBJ/test.rom
-verilator --cc --exe --build -O2 -j 0 --public-flat-rw $QUIET -I$T --top-module tempest_top -Mdir $OBJ/tempest $RTL tb_tempest.cpp >/dev/null
+verilator --cc --exe --build -O2 -j 0 --public-flat-rw $QUIET -I$T --top-module tempest_top -Mdir $OBJ/tempest $RTL "$PWD/tb_tempest.cpp" >/dev/null
 $OBJ/tempest/Vtempest_top $OBJ/test.rom $OBJ
