@@ -25,7 +25,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y verilator
 
       - name: Lint and simulate
-        run: ./sim/run_tests.sh
+        run: sh ./sim/run_tests.sh
 
   compile:
     needs: test
