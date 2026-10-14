@@ -45,7 +45,7 @@ module mathBox
 
     logic [7:0] status;
 
-    enum {IDLE, C0B, S048A, S048B, C12A, C12B, C13, C14, S0BFA, S0BFB, S0BFC, C11, C1D, C1EA, C1EB} state, nextState;
+    enum {IDLE, C0B, S048A, S048B, C12A, C12B, C13, C14, S0BFA, S0BFB, S0BFC, C11, C1D, C1EA, C1EB, C1C, C1CL} state, nextState;
 
     always_ff @(posedge clk) begin
       if (clk_en) begin
@@ -85,6 +85,10 @@ module mathBox
   end
 
     logic [31:0] workRegA, workRegB, workRegC;
+    logic [15:0] rndSum;            // MAME rounding: (lo(a)>>1) + (lo(b)>>1)
+    logic [16:0] winE, winF;        // window test midpoints (17-bit sums)
+    logic [15:0] winE16, winF16;
+    logic [16:0] winEF;
 
     always_comb begin
         mbRegD = 0;
@@ -97,6 +101,8 @@ module mathBox
         workRegA = 0;
         workRegB = 0;
         workRegC = 0;
+        rndSum = 0;
+        winE = 0; winF = 0; winE16 = 0; winF16 = 0; winEF = 0;
         case(state)
             IDLE: begin
                 status = 0;
@@ -259,7 +265,8 @@ module mathBox
                 workRegA = $signed(mbRegQ[0]) * $signed(mbRegQ[4]);
                 workRegB = -1*$signed(mbRegQ[1]) * $signed(mbRegQ[5]);
 
-                workRegC = workRegA + workRegB;
+                // REG7 = hi(a) + hi(b), +1 if (lo(a)>>1)+(lo(b)>>1) is negative (MAME)
+                rndSum = {1'b0, workRegA[15:1]} + {1'b0, workRegB[15:1]};
 
                 mbRegD[12] = (workRegB[15:0] >> 1);
                 mbRegD[14] = (workRegA[15:0] >> 1);
@@ -267,7 +274,7 @@ module mathBox
                 mbRegEn[12] = 2'b11;
                 mbRegEn[14] = 2'b11;
 
-                mbRegD[7] = workRegC[31:16];
+                mbRegD[7] = workRegA[31:16] + workRegB[31:16] + {15'd0, rndSum[15]};
                 mbRegEn[7] = 2'b11;
             end
 
@@ -287,15 +294,16 @@ module mathBox
                 workRegA = $signed(mbRegQ[1]) * $signed(mbRegQ[4]);
                 workRegB = $signed(mbRegQ[0]) * $signed(mbRegQ[5]);
 
-                workRegC = workRegA + workRegB;
+                // REG9 = ((lo(a)>>1) + (lo(b)>>1)) << 1, REG8 = hi(a)+hi(b) (+1 if REG9 sum negative)
+                rndSum = {1'b0, workRegA[15:1]} + {1'b0, workRegB[15:1]};
 
-                mbRegD[9] = (workRegA[15:0] + workRegB[15:0]) & 16'hFFFE;
+                mbRegD[9] = {rndSum[14:0], 1'b0};
                 mbRegD[12] = workRegB[15:0] >> 1;
 
                 mbRegEn[9] = 2'b11;
                 mbRegEn[12] = 2'b11;
 
-                mbRegD[8] = workRegC[31:16]; //reg8 + regC
+                mbRegD[8] = workRegA[31:16] + workRegB[31:16] + {15'd0, rndSum[15]};
                 mbRegEn[8] = 2'b11;
             end
 
@@ -440,6 +448,33 @@ module mathBox
                 mbOutEn = 1'b1;
             end
 
+            // Command 1C (MAME "window test"): load REG5 high, then bisect
+            C1C: begin
+                mbRegD[5] = {dataIn, mbRegQ[5][7:0]};
+                mbRegEn[5] = 2'b11;
+            end
+
+            C1CL: begin
+                winE = {mbRegQ[4][15], mbRegQ[4]} + {mbRegQ[7][15], mbRegQ[7]};
+                winF = {mbRegQ[5][15], mbRegQ[5]} + {mbRegQ[8][15], mbRegQ[8]};
+                winE16 = winE[16:1];
+                winF16 = winF[16:1];
+                winEF  = {winE16[15], winE16} + {winF16[15], winF16};
+                mbRegD[14] = winE16;  mbRegEn[14] = 2'b11;
+                mbRegD[15] = winF16;  mbRegEn[15] = 2'b11;
+                if (($signed(mbRegQ[11]) < $signed(winE16)) && ($signed(winF16) < $signed(winE16)) && !winEF[16]) begin
+                    mbRegD[7] = winE16;  mbRegEn[7] = 2'b11;
+                    mbRegD[8] = winF16;  mbRegEn[8] = 2'b11;
+                    mbOutD = winF16;
+                end else begin
+                    mbRegD[4] = winE16;  mbRegEn[4] = 2'b11;
+                    mbRegD[5] = winF16;  mbRegEn[5] = 2'b11;
+                    mbOutD = mbRegQ[8];
+                end
+                mbRegD[6] = mbRegQ[6] - 16'd1;  mbRegEn[6] = 2'b11;
+                mbOutEn = 1'b1;
+            end
+
         endcase
     end
 
@@ -450,13 +485,15 @@ module mathBox
             IDLE: begin
                 if(we) begin
                     case(addr)
-                        8'h7b: nextState = C0B;
-                        8'h82: nextState = C12A;
-                        8'h83: nextState = C13;
-                        8'h84: nextState = C14;
-                        8'h81: nextState = C11;
-                        8'h8D: nextState = C1D;
-                        8'h8E: nextState = C1EA;
+                        // Tempest: command = $6080 + MAME offset (0B, 12, 13, 14, 11, 1D, 1E)
+                        8'h8B: nextState = C0B;
+                        8'h92: nextState = C12A;
+                        8'h93: nextState = C13;
+                        8'h94: nextState = C14;
+                        8'h91: nextState = C11;
+                        8'h9D: nextState = C1D;
+                        8'h9E: nextState = C1EA;
+                        8'h9C: nextState = C1C;
                         default: nextState = IDLE;
                     endcase
                 end
@@ -477,6 +514,8 @@ module mathBox
           C1D: nextState   = C1EA;
           C1EA: nextState  = C1EB;
           C1EB: nextState  = IDLE;
+          C1C:  nextState  = C1CL;
+          C1CL: nextState  = ($signed(mbRegQ[6]) > 0) ? C1CL : IDLE;   // do { } while (--REG6 >= 0)
           default: nextState  = IDLE;
         endcase
     end

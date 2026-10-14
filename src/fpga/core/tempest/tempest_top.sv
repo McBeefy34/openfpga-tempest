@@ -429,8 +429,8 @@ module tempest_top
 
   // AVG units -> 512x512 screen. Tempest's picture spans about 580 x 570
   // units (MAME visible area), so scale by 7/8 around the centre.
-  // Tempest's monitor is mounted rotated; together with MAME's ROT270 the
-  // AVG's +Y ends up pointing down the screen.
+  // AVG +Y points up the screen (confirmed on hardware); the Flip settings
+  // mirror either axis.
   function automatic [12:0] to_screen(input [12:0] v, input flip);
     reg signed [15:0] sv;
     reg signed [15:0] sc;
@@ -463,9 +463,9 @@ module tempest_top
     .empty      (q_empty),
     .almostFull (q_almost_full),
     .DStartX    (to_screen(vStartX, flip_x)),
-    .DStartY    (to_screen(vStartY, flip_y)),
+    .DStartY    (to_screen(vStartY, ~flip_y)),   // AVG +Y is up on the Tempest monitor
     .DEndX      (to_screen(vEndX,   flip_x)),
-    .DEndY      (to_screen(vEndY,   flip_y)),
+    .DEndY      (to_screen(vEndY,   ~flip_y)),
     .DIntensity ({1'b0, line_rgb}),
     .read       (lineDone),
     .currWrite  (line_vis),

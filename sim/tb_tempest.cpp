@@ -115,8 +115,8 @@ int main(int argc, char** argv) {
         if (c == 0xFFFF00) yel++; else if (c == 0x00FF00) grn++; else other++;
     }
     printf("yellow %d green %d other %d\n", yel, grn, other);
-    printf("sample: (256,256)=%06X (300,256)=%06X (343,256)=%06X (343,300)=%06X (343,343)=%06X (300,300)=%06X\n",
-           px(256,256), px(300,256), px(343,256), px(343,300), px(343,343), px(300,300));
+    printf("sample: (300,255)=%06X (343,212)=%06X (343,300)=%06X (300,212)=%06X\n",
+           px(300,255), px(343,212), px(343,300), px(300,212));
     int fails = 0;
     auto check = [&](bool ok, const char* what) { printf("%s %s\n", ok ? "PASS" : "FAIL", what); if (!ok) fails++; };
     check(frames_with_pixels >= 4,                       "frames reach the video output");
@@ -127,7 +127,7 @@ int main(int argc, char** argv) {
     check(ram(0x13) == 0x5A,                             "EAROM write / read back");
     check(audio_max - audio_min > 1000,                  "POKEY audio present");
     check(yel >= 80 && grn >= 80 && other == 0,          "coloured vectors from colour RAM");
-    check(px(300,256) == 0xFFFF00 && px(343,300) == 0x00FF00 && px(300,300) == 0, "vector positions");
+    check(px(300,255) == 0xFFFF00 && px(343,212) == 0x00FF00 && px(343,300) == 0 && px(300,212) == 0, "vector positions (AVG +Y up)");
     printf("%s\n", fails ? "SIMULATION FAILED" : "ALL CHECKS PASSED");
     delete t;
     return fails ? 1 : 0;
