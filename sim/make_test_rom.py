@@ -31,6 +31,7 @@ lda_i(0x40); sta(0x60C0)                   # AUDF1
 lda_i(0xAF); sta(0x60C1)                   # AUDC1 pure tone, volume 15
 lda_i(0x04); sta(0x0801)                   # colour 1: R+G (yellow)
 lda_i(0x06); sta(0x0802)                   # colour 2: G (green)
+lda_i(0x0C); sta(0x0803)                   # colour 3: R (red)
 
 words = [0x8000,            # CNTR
          0x7000,            # SCAL 0
@@ -39,6 +40,11 @@ words = [0x8000,            # CNTR
          0x0000, 0xE064,    # VCTR dy=0, dx=+100, z=7
          0x6802,            # STAT colour 2
          0x0064, 0xE000,    # VCTR dy=+100, dx=0, z=7
+         0x8000,            # CNTR
+         0x7241,            # SCAL binary 2 (x1/4), linear 0x41 (x191/256)
+         0x6803,            # STAT colour 3
+         0x0000, 0xFE70,    # VCTR dy=0, dx=-400 (-> about -75 after scale), z=7
+         0x7000,            # SCAL 0
          0xE000]            # JMP 0
 for i, w in enumerate(words):
     lda_i(w & 0xFF);  sta(0x2000 + 2*i)

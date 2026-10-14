@@ -108,13 +108,13 @@ int main(int argc, char** argv) {
 
     // pixel checks on the last frame (yellow horizontal, green vertical)
     auto px = [&](int x, int y) { return last[y * 512 + x]; };
-    int yel = 0, grn = 0, other = 0;
+    int yel = 0, grn = 0, red = 0, other = 0;
     for (int y = 0; y < 512; y++) for (int x = 0; x < 512; x++) {
         uint32_t c = px(x, y);
         if (!c) continue;
-        if (c == 0xFFFF00) yel++; else if (c == 0x00FF00) grn++; else other++;
+        if (c == 0xFFFF00) yel++; else if (c == 0x00FF00) grn++; else if (c == 0xFF0000) red++; else other++;
     }
-    printf("yellow %d green %d other %d\n", yel, grn, other);
+    printf("yellow %d green %d red %d other %d\n", yel, grn, red, other);
     printf("sample: (300,255)=%06X (343,212)=%06X (343,300)=%06X (300,212)=%06X\n",
            px(300,255), px(343,212), px(343,300), px(300,212));
     int fails = 0;
@@ -127,6 +127,8 @@ int main(int argc, char** argv) {
     check(ram(0x13) == 0x5A,                             "EAROM write / read back");
     check(audio_max - audio_min > 1000,                  "POKEY audio present");
     check(yel >= 80 && grn >= 80 && other == 0,          "coloured vectors from colour RAM");
+    check(red >= 60 && red <= 72 && px(220,255) == 0xFF0000 && px(180,255) == 0 && other == 0,
+          "negative vector with binary scale (SCAL) stays in place");
     check(px(300,255) == 0xFFFF00 && px(343,212) == 0x00FF00 && px(343,300) == 0 && px(300,212) == 0, "vector positions (AVG +Y up)");
     printf("%s\n", fails ? "SIMULATION FAILED" : "ALL CHECKS PASSED");
     delete t;

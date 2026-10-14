@@ -35,7 +35,7 @@ module avg_core
   logic [2:0]          pcOffset;
   logic [3:0]          zVal, decZVal;
   logic signed [7:0]   linScale, decLinScale;
-  logic signed [2:0]   binScale, decBinScale;
+  logic        [2:0]   binScale, decBinScale;
   logic [15:0]         nextPC, pc;
 
   logic                retValid;
@@ -209,37 +209,41 @@ module avg_core
     end
   end
 
+  // Scaled vector deltas.
+  //   delta = ((d * 2 * (256 - linScale)) / 256) >> binScale
+  // Same result as the original single expression, but registered: the
+  // instruction and scale registers settle several 6 MHz steps before the
+  // delta is used, and doing the multiply, divide and shift in one 20 ns
+  // cycle does not meet timing on the Pocket's FPGA (it showed up as stray
+  // lines when high bits of the end point came out wrong).
+  logic        [9:0]  linMul2;              // 2 * (256 - linScale): 2..512
+  logic signed [23:0] prodX, prodY;
+  logic signed [23:0] scaledX, scaledY;
+  logic signed [13:0] deltaX_r, deltaY_r;
+
+  assign linMul2 = {(9'd256 - {1'b0, linScale}), 1'b0};
+  assign prodX   = $signed({{11{dX[12]}}, dX}) * $signed({14'd0, linMul2});
+  assign prodY   = $signed({{11{dY[12]}}, dY}) * $signed({14'd0, linMul2});
+  assign scaledX = (prodX >>> 8) >>> binScale;
+  assign scaledY = (prodY >>> 8) >>> binScale;
+
+  always_ff @(posedge clk_in) begin
+    deltaX_r <= scaledX[13:0];
+    deltaY_r <= scaledY[13:0];
+  end
+
   always_comb begin
-    if(center) begin
+    dX_buf = 22'b0;
+    dY_buf = 22'b0;
+    linScale_buf = 22'b0;
+    nextX_scaled = 22'b0;
+    nextY_scaled = 22'b0;
+    if (center) begin
       nextX = 0;
       nextY = 0;
-// ajs ajs ajs		
-		    dX_buf=22'b0;
-    dY_buf=22'b0;
-    linScale_buf=22'b0;
-    nextX_scaled=22'b0;
-    nextY_scaled=22'b0;
-// ajs ajs ajs
-		
-    end
-    else begin //DEMO: multiplied dx/dy by 2
-      if(dX[12] == 1'b1)
-        dX_buf[21:13] = 9'b111111111;
-      else
-        dX_buf[21:13] = 9'b000000000;
-      if(dY[12] == 1'b1)
-        dY_buf[21:13] = 9'b111111111;
-      else
-        dY_buf[21:13] = 9'b000000000;
-      dX_buf[12:0] = dX;
-      dY_buf[12:0] = dY;
-      linScale_buf[21:8] = 14'd0;
-      linScale_buf[7:0] = linScale;
-      nextX_scaled = ((currX + ((((dX_buf * 2 * (21'd256 - linScale_buf)) / 21'd256) >> binScale) * 1) / 1));
-      nextY_scaled = ((currY + ((((dY_buf * 2 * (21'd256 - linScale_buf)) / 21'd256) >> binScale) * 1) / 1));
-
-      nextX = nextX_scaled[13:0];
-      nextY = nextY_scaled[13:0];
+    end else begin
+      nextX = currX + deltaX_r;
+      nextY = currY + deltaY_r;
     end
   end
 
