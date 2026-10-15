@@ -71,7 +71,8 @@ module tempest_top
   output wire        vid_vs,
 
   // audio (clk domain), signed
-  output reg  [15:0] audio
+  output reg  [15:0] audio,
+  output reg         audio_tgl       // toggles when a new audio sample is ready
 );
 
   //--------------------------------------------------------------------------
@@ -318,7 +319,13 @@ module tempest_top
       pokey2_h <= pokey2_q;
     end
   end
-  wire       pokey1_aud, pokey2_aud;
+  wire [5:0] pokey1_vol, pokey2_vol;
+
+  // POKEY clock: exactly 1.512 MHz (MASTER_CLOCK / 8) from 49.5 MHz
+  reg  [16:0] pk_acc = 17'd0;
+  wire [16:0] pk_sum = pk_acc + 17'd1512;
+  wire        pokey_step = (pk_sum >= 17'd49500);
+  always @(posedge clk) pk_acc <= pokey_step ? pk_sum - 17'd49500 : pk_sum;
 
   POKEY pokey1
   (
@@ -329,8 +336,8 @@ module tempest_top
     .phi2             (phi2),
     .readHighWriteLow (~(WE & sel_pokey1)),
     .cs0Bar           (~sel_pokey1),
-    .aud              (pokey1_aud),
-    .audio            (),
+    .step_en          (pokey_step),
+    .vol              (pokey1_vol),
     .clk              (clk)
   );
 
@@ -343,8 +350,8 @@ module tempest_top
     .phi2             (phi2),
     .readHighWriteLow (~(WE & sel_pokey2)),
     .cs0Bar           (~sel_pokey2),
-    .aud              (pokey2_aud),
-    .audio            (),
+    .step_en          (pokey_step),
+    .vol              (pokey2_vol),
     .clk              (clk)
   );
 
@@ -520,29 +527,38 @@ module tempest_top
   );
 
   //--------------------------------------------------------------------------
-  // Audio: each POKEY outputs a PWM bit; count ones over 1024 clocks
-  // (48.3 kHz) and mix the two chips.
+  // Audio. Both POKEY volume sums (0..60 each) are averaged over 1024
+  // clocks (48.3 kHz), passed through a one-pole lowpass at about 3 kHz
+  // standing in for the POKEY output RC network MAME models for Tempest
+  // (10k / 0.015uF), then a DC blocker. audio_tgl marks each new sample so
+  // the I2S side can take it without catching a value mid-change.
   //--------------------------------------------------------------------------
   reg  [9:0]         aud_cnt = 10'd0;
-  reg  [10:0]        acc1, acc2;
-  reg  signed [27:0] dc = 28'sd0;              // DC estimate, 12 fractional bits
-  wire signed [15:0] mix = $signed({5'd0, acc1}) + $signed({5'd0, acc2});   // 0..2048
-  wire signed [27:0] dc_int = dc >>> 12;
-  wire signed [27:0] mix_hi = {mix, 12'd0};               // mix << 12 (mix is 0..2048)
-  wire signed [15:0] ac  = mix - dc_int[15:0];
-  wire signed [19:0] ac_x16 = {ac, 4'd0};
+  reg  [16:0]        acc = 17'd0;                 // sum over 1024 clocks: 0..122880
+  reg  signed [23:0] lp  = 24'sd0;                // lowpass state, 8 fractional bits
+  reg  signed [27:0] dc  = 28'sd0;                // DC estimate, 12 fractional bits
+  wire [6:0]         mixv = {1'b0, pokey1_vol} + {1'b0, pokey2_vol};
+  wire signed [23:0] x    = {2'b00, acc[16:3], 8'd0};               // acc/8 = 0..15360, 8 fractional bits
+  wire signed [31:0] lp_d = ({{8{x[23]}}, x} - {{8{lp[23]}}, lp}) * 32'sd83;
+  wire signed [31:0] lp_s = lp_d >>> 8;
+  wire signed [23:0] lp_n = lp + lp_s[23:0];                        // alpha = 83/256 (fc ~ 3 kHz)
+  wire signed [27:0] lp_w = {{4{lp_n[23]}}, lp_n} <<< 4;             // 12 fractional bits
+  wire signed [27:0] dc_n = dc + ((lp_w - dc) >>> 10);               // ~7.5 Hz high-pass
+  wire signed [27:0] ac   = (lp_w - dc_n) >>> 11;                    // +-15360 -> 1 bit gain
   always @(posedge clk) begin
     aud_cnt <= aud_cnt + 10'd1;
     if (aud_cnt == 10'd0) begin
-      dc    <= dc + ((mix_hi - dc) >>> 10);   // ~7.5 Hz high-pass
-      audio <= ac_x16[15:0];
-      acc1  <= {10'd0, pokey1_aud};
-      acc2  <= {10'd0, pokey2_aud};
+      lp        <= lp_n;
+      dc        <= dc_n;
+      audio     <= (ac > 28'sd32767) ? 16'sd32767 : (ac < -28'sd32768) ? -16'sd32768 : ac[15:0];
+      audio_tgl <= ~audio_tgl;
+      acc       <= {10'd0, mixv};
     end else begin
-      acc1  <= acc1 + {10'd0, pokey1_aud};
-      acc2  <= acc2 + {10'd0, pokey2_aud};
+      acc       <= acc + {10'd0, mixv};
     end
   end
+
+  initial audio_tgl = 1'b0;
 
 endmodule
 

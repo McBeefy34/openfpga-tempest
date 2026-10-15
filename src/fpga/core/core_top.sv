@@ -646,6 +646,7 @@ pocket_loader loader (
     wire [23:0] t_rgb;
     wire        t_de, t_hs, t_vs;
     wire [15:0] t_audio;
+    wire        t_audio_tgl;
     wire        ea_dirty;
 
 tempest_top tempest (
@@ -684,7 +685,8 @@ tempest_top tempest (
     .vid_hs     ( t_hs ),
     .vid_vs     ( t_vs ),
 
-    .audio      ( t_audio )
+    .audio      ( t_audio ),
+    .audio_tgl  ( t_audio_tgl )
 );
 
 assign video_rgb_clock    = clk_vid;
@@ -760,7 +762,8 @@ end
 //--------------------------------------------------------------------------------------
 // Audio: 48 kHz I2S, 16-bit signed, mono to both channels
 //--------------------------------------------------------------------------------------
-    reg  [15:0] aud_s1, aud_s2;
+    reg  [15:0] aud_s2 = 16'd0;            // last complete sample
+    reg  [2:0]  aud_tgl_s = 3'b000;
 
     reg  [21:0] audgen_accum = 22'd0;
     reg         audgen_mclk  = 1'b0;
@@ -782,8 +785,11 @@ always @(posedge audgen_mclk) aud_mclk_divider <= aud_mclk_divider + 1'b1;
     reg         audgen_dac  = 1'b0;
     reg  [31:0] aud_shift = 32'd0;
 always @(negedge audgen_sclk) begin
-    aud_s1 <= t_audio;               // sample slowly-changing audio from clk_sys
-    aud_s2 <= aud_s1;
+    // Take a new sample only after its ready toggle has crossed over: the
+    // value is then stable (it is held for 1024 core clocks), so no bits
+    // can be caught mid-change (that was the crackle).
+    aud_tgl_s <= {aud_tgl_s[1:0], t_audio_tgl};
+    if (aud_tgl_s[2] != aud_tgl_s[1]) aud_s2 <= t_audio;
     audgen_dac      <= aud_shift[31];
     audgen_lrck_cnt <= audgen_lrck_cnt + 1'b1;
     if (audgen_lrck_cnt == 5'd31) begin
