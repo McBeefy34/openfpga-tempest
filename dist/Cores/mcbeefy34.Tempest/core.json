@@ -7,8 +7,8 @@
             "description": "Atari's Tempest (1980), a colour vector arcade game.",
             "author": "mcbeefy34",
             "url": "https://github.com/mcbeefy34/openfpga-tempest",
-            "version": "0.1.0",
-            "date_release": "2026-10-13"
+            "version": "0.1.1",
+            "date_release": "2026-10-14"
         },
         "framework": {
             "target_product": "Analogue Pocket",
