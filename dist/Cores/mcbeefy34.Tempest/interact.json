@@ -288,6 +288,17 @@
                 "writeonly": true,
                 "defaultval": 0,
                 "value": 1
+            },
+            {
+                "name": "Show Stick Debug",
+                "id": 15,
+                "type": "check",
+                "enabled": true,
+                "persist": false,
+                "address": "0x80000038",
+                "writeonly": true,
+                "defaultval": 0,
+                "value": 1
             }
         ],
         "messages": []

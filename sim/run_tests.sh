@@ -30,3 +30,4 @@ echo "== sim: Tempest machine with a synthetic test ROM"
 python3 make_test_rom.py $OBJ/test.rom
 verilator --cc --exe --build -O2 -j 0 --public-flat-rw $QUIET -I$T --top-module tempest_top -Mdir $OBJ/tempest $RTL "$PWD/tb_tempest.cpp" >/dev/null
 $OBJ/tempest/Vtempest_top $OBJ/test.rom $OBJ
+$OBJ/tempest/Vtempest_top $OBJ/test.rom $OBJ dbg

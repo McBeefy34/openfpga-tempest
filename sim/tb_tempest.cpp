@@ -26,6 +26,8 @@ int main(int argc, char** argv) {
     t->clk = 0; t->clk_vid = 0; t->reset = 1;
     t->dl_wr = 0; t->ea_dl_wr = 0; t->ea_rd_word = 0;
     t->coin = 0; t->start1 = 0; t->start2 = 0; t->fire = 0; t->zap = 0; t->service = 0;
+    bool dbg = argc > 3;                         // "dbg": check the stick overlay instead
+    t->dbg_en = dbg; t->dbg_joy = dbg ? 0x00000000000000C0ULL | (0x40ULL << 8) : 0;
     t->knob = 5; t->dsw1 = 0; t->dsw2 = 0; t->in2_dip = 7; t->flip_x = 0; t->flip_y = 0;
 
     uint64_t now = 0, next_sys = SYS_PS / 2, next_vid = VID_PS / 2;
@@ -117,6 +119,14 @@ int main(int argc, char** argv) {
     printf("yellow %d green %d red %d other %d\n", yel, grn, red, other);
     printf("sample: (300,255)=%06X (343,212)=%06X (343,300)=%06X (300,212)=%06X\n",
            px(300,255), px(343,212), px(343,300), px(300,212));
+    if (dbg) {
+        // row 0 = cont1 lx = 0xC0, row 1 = ly = 0x40; bar rows y = 8+r*16+2 .. +7
+        bool ok = px(16 + 0xBF, 12) == 0xFFFFFF && px(16 + 0xC2, 12) != 0xFFFFFF
+               && px(16 + 0x3F, 28) == 0xFFFFFF && px(16 + 0x42, 28) != 0xFFFFFF
+               && px(16 + 128, 9) == 0xFF0000 && px(16 + 128, 9 + 16 * 7) == 0xFF0000;
+        printf("%s stick debug overlay\n", ok ? "PASS" : "FAIL");
+        delete t; return ok ? 0 : 1;
+    }
     int fails = 0;
     auto check = [&](bool ok, const char* what) { printf("%s %s\n", ok ? "PASS" : "FAIL", what); if (!ok) fails++; };
     check(frames_with_pixels >= 4,                       "frames reach the video output");

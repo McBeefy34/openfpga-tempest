@@ -65,6 +65,8 @@ module tempest_top
 
   // video (clk_vid domain)
   input  wire        clk_vid,
+  input  wire        dbg_en,
+  input  wire [63:0] dbg_joy,
   output wire [23:0] vid_rgb,
   output wire        vid_de,
   output wire        vid_hs,
@@ -520,6 +522,8 @@ module tempest_top
     .drain_idle (q_empty & rast_ready & ~line_vis),
     .busy       (fb_busy),
     .clk_vid    (clk_vid),
+    .dbg_en     (dbg_en),
+    .dbg_joy    (dbg_joy),
     .vid_rgb    (vid_rgb),
     .vid_de     (vid_de),
     .vid_hs     (vid_hs),
