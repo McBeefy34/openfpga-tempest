@@ -537,6 +537,7 @@ mf_pllbase mp1 (
     reg         set_flip_x     = 1'b0;
     reg         set_flip_y     = 1'b0;
     reg         set_service    = 1'b0;
+    reg         set_stickdbg   = 1'b0;
     reg  [23:0] menu_reset_cnt = 24'd0; // held reset after "Reset" in the menu
 
 always @(posedge clk_74a) begin
@@ -557,6 +558,7 @@ always @(posedge clk_74a) begin
         8'h2C: set_flip_x     <= bridge_wr_data[0];
         8'h30: set_flip_y     <= bridge_wr_data[0];
         8'h34: set_service    <= bridge_wr_data[0];
+        8'h38: set_stickdbg   <= bridge_wr_data[0];
         default: ;
         endcase
     end
@@ -594,9 +596,11 @@ end
 //--------------------------------------------------------------------------------------
     reg  [15:0] key_s1, key_s;
     reg  [7:0]  joyx_s1, joyx_s;
+    reg  [3:0]  ctype_s1, ctype_s;      // controller type, cont1_key[31:28]
 always @(posedge clk_sys) begin
     key_s1  <= cont1_key[15:0];  key_s  <= key_s1;
     joyx_s1 <= cont1_joy[7:0];   joyx_s <= joyx_s1;
+    ctype_s1 <= cont1_key[31:28]; ctype_s <= ctype_s1;
 end
 
     wire btn_left   = key_s[2];
@@ -614,7 +618,9 @@ spinner spin (
     .right      ( btn_right ),
     .speed      ( opt_s[7:6] ),
     .reverse    ( opt_s[5] ),
-    .analog_en  ( opt_s[4] ),
+    // Only a docked controller with analog support (type 3) has a stick;
+    // otherwise cont1_joy reads 0 (hard left) and would spin the claw.
+    .analog_en  ( opt_s[4] && ctype_s == 4'h3 ),
     .analog_x   ( joyx_s ),
     .pos        ( knob )
 );
@@ -680,6 +686,9 @@ tempest_top tempest (
     .flip_y     ( opt_s[2] ),
 
     .clk_vid    ( clk_vid ),
+    .dbg_en     ( set_stickdbg ),
+    // last overlay row shows player 1's controller type x 32 instead of cont2 right Y
+    .dbg_joy    ( {cont1_key[30:28], 5'd0, cont2_joy[23:0], cont1_joy} ),
     .vid_rgb    ( t_rgb ),
     .vid_de     ( t_de ),
     .vid_hs     ( t_hs ),

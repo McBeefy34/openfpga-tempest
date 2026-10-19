@@ -25,6 +25,8 @@ module vector_fb
   output wire        busy,
 
   input  wire        clk_vid,
+  input  wire        dbg_en,       // draw controller stick values as bars
+  input  wire [63:0] dbg_joy,      // {cont2_joy, cont1_joy}, any clock domain
   output reg  [23:0] vid_rgb,
   output reg         vid_de,
   output reg         vid_hs,
@@ -131,6 +133,31 @@ module vector_fb
   // hold the data for the address presented one clock earlier); a second
   // registers the outputs.
   reg de_p, hs_p, vs_p, front_p;
+  reg [2:0] drow_p;
+  always @(posedge clk_vid) drow_p <= drow;
+
+  // Stick debug overlay: eight rows at the top left, one per axis
+  // (cont1 lx, ly, rx, ry, then cont2 lx, ly, rx, and finally player 1's
+  // controller type x 32). Bar length = raw value (0..255),
+  // red ticks at 0, 128 (centre) and 255. Values are slow-changing, so a
+  // double register is enough to bring them into this clock domain.
+  reg  [63:0] dbg_s1, dbg_s2;
+  reg         dbg_en_s1, dbg_en_s2;
+  reg         dbg_on, dbg_bar, dbg_tick;
+  wire [9:0]  dx   = hx - 10'd16;
+  wire [9:0]  dyr  = vy - 10'd8;
+  wire [2:0]  drow = dyr[6:4];                          // 16-pixel row pitch
+  wire        d_in = dbg_en_s2 && (vy >= 10'd8) && (vy < 10'd136) && (dyr[3:0] < 4'd10)
+                     && (hx >= 10'd14) && (hx < 10'd274);
+  wire [7:0]  dval = dbg_s2[{drow, 3'b000} +: 8];
+  always @(posedge clk_vid) begin
+    dbg_s1 <= dbg_joy;   dbg_s2 <= dbg_s1;
+    dbg_en_s1 <= dbg_en; dbg_en_s2 <= dbg_en_s1;
+    dbg_on   <= d_in;
+    dbg_tick <= d_in && (dx == 10'd0 || dx == 10'd128 || dx == 10'd255 || hx == 10'd14 || hx == 10'd15);
+    dbg_bar  <= d_in && (hx >= 10'd16) && (dx[8:0] <= {1'b0, dval}) && (dyr[3:0] >= 4'd2) && (dyr[3:0] < 4'd8);
+  end
+
   always @(posedge clk_vid) begin
     de_p    <= h_act & v_act;
     hs_p    <= (hcnt == 10'd3);
@@ -140,7 +167,9 @@ module vector_fb
     vid_de  <= de_p;
     vid_hs  <= hs_p;
     vid_vs  <= vs_p;
-    if (de_p) begin
+    if (de_p && dbg_on && (dbg_tick || dbg_bar)) begin
+      vid_rgb <= dbg_tick ? 24'hFF0000 : (drow_p[2] ? 24'h00FFFF : 24'hFFFFFF);
+    end else if (de_p) begin
       // buffer 0 = A, 1 = B
       vid_rgb <= front_p ? {{8{q_b[2]}}, {8{q_b[1]}}, {8{q_b[0]}}}
                          : {{8{q_a[2]}}, {8{q_a[1]}}, {8{q_a[0]}}};
