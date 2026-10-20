@@ -81,9 +81,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" release/tempest-pocket.zip \
-            --title "Tempest for Analogue Pocket ${GITHUB_REF_NAME}" \
-            --notes "Unzip onto the root of the Pocket's SD card. ROMs are not included: build tempest.rom with Assets/tempest/common/make_tempest_rom.py and put it in that folder."
+          # If the release already exists (tag moved to a newer commit),
+          # replace its zip and keep the notes; otherwise create it.
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" release/tempest-pocket.zip --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" release/tempest-pocket.zip \
+              --title "Tempest for Analogue Pocket ${GITHUB_REF_NAME}" \
+              --notes "Unzip onto the root of the Pocket's SD card. ROMs are not included: build tempest.rom with Assets/tempest/common/make_tempest_rom.py and put it in that folder."
+          fi
 
       - name: Upload reports
         if: always()
